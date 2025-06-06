@@ -1,0 +1,4 @@
+build/app/outputs/apk/debug/app-debug.apk filter=lfs diff=lfs merge=lfs -text
+build/app/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/x86_64/libflutter.so filter=lfs diff=lfs merge=lfs -text
+*.apk filter=lfs diff=lfs merge=lfs -text
+*.so filter=lfs diff=lfs merge=lfs -text
