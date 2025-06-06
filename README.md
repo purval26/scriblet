@@ -5,7 +5,6 @@ A real-time multiplayer drawing and guessing game built with Flutter and Node.js
 ## Download
 📱 [Download Android APK (v1.0.0)](https://github.com/purval26/skribbl_clone/raw/refs/heads/release_v1.0.0_clean/releases/skribbl_clone_v1.0.0.apk?download=)
 
-🌐 [Play Online (Web Version)](https://skribbl-clone-server.onrender.com)
 
 ## Features
 - Real-time drawing with Socket.IO
