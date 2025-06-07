@@ -8,8 +8,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-android {
-    namespace = "com.example.skribbl_clone"
+android {    namespace = "com.purval.scriblet"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

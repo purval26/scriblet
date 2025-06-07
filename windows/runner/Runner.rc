@@ -89,13 +89,12 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "skribbl_clone" "\0"
+            VALUE "CompanyName", "com.example" "\0"            VALUE "FileDescription", "Scriblet" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "skribbl_clone" "\0"
+            VALUE "InternalName", "Scriblet" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "skribbl_clone.exe" "\0"
-            VALUE "ProductName", "skribbl_clone" "\0"
+            VALUE "OriginalFilename", "Scriblet.exe" "\0"
+            VALUE "ProductName", "Scriblet" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
