@@ -1,4 +1,4 @@
-# Draw It - A Drawing and Guessing Game
+# Scriblet - A Drawing and Guessing Game
 
 A real-time multiplayer drawing and guessing game built with Flutter and Node.js.
 
@@ -30,7 +30,7 @@ A real-time multiplayer drawing and guessing game built with Flutter and Node.js
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/draw-it.git
+git clone https://github.com/purval26/scriblet.git
 ```
 
 2. Install frontend dependencies
