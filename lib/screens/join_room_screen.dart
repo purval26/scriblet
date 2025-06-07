@@ -34,8 +34,12 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // Clean up socket connection when leaving
+        // Clean up socket and room data when leaving
         socket.disconnect();
+        SocketService.setRejoining(false);
+        SocketService.setGameState(null);
+        // Clear latest room data
+        SocketService().clearRoomData();
         return true;
       },
       child: AnimatedBuilder(

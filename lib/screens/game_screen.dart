@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../socket_service.dart';
+import '../widgets/tutorial_dialog.dart'; // Import your dialog
+import 'lobby_screen.dart'; // Import LobbyScreen
 
 class GameScreen extends StatefulWidget {
   final String username;
@@ -43,16 +46,22 @@ class _GameScreenState extends State<GameScreen> {
   String get latestHiddenWord => SocketService.latestHiddenWord;
   String get hiddenWord {
     if (word.isEmpty) return '';
-    
-    return word.split('').asMap().entries.map((entry) {
-      final index = entry.key;
-      final letter = entry.value;
-      
-      if (letter == ' ') return ' ';
-      if (revealedIndices.contains(index)) return letter;
-      return '_';
-    }).join(' ');
+
+    return word
+        .split('')
+        .asMap()
+        .entries
+        .map((entry) {
+          final index = entry.key;
+          final letter = entry.value;
+
+          if (letter == ' ') return ' ';
+          if (revealedIndices.contains(index)) return letter;
+          return '_';
+        })
+        .join(' ');
   }
+
   bool get isDrawer =>
       SocketService.latestDrawerId == SocketService().socket.id;
   String get drawer => SocketService.latestDrawer;
@@ -85,10 +94,11 @@ class _GameScreenState extends State<GameScreen> {
   void _showOverlay() {
     // Remove existing overlay first
     _removeOverlay();
-    
+
     if (!mounted) return;
 
-    final RenderBox? renderBox = _toolsKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? renderBox =
+        _toolsKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
 
     final Offset offset = renderBox.localToGlobal(Offset.zero);
@@ -107,7 +117,10 @@ class _GameScreenState extends State<GameScreen> {
               ),
               Positioned(
                 top: offset.dy + renderBox.size.height + 8,
-                right: MediaQuery.of(context).size.width - offset.dx - renderBox.size.width,
+                right:
+                    MediaQuery.of(context).size.width -
+                    offset.dx -
+                    renderBox.size.width,
                 child: buildExpandedTools(),
               ),
             ],
@@ -137,7 +150,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
-
+    _showTutorialIfFirstTime();
     // Handle rejoining
     if (SocketService.isRejoining && SocketService.gameState != null) {
       final gameState = SocketService.gameState!;
@@ -153,7 +166,8 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     final settings = SocketService.latestSettings;
-    timeLeft = settings['drawTime'];    socket.on('drawing-data', (raw) {
+    timeLeft = settings['drawTime'];
+    socket.on('drawing-data', (raw) {
       try {
         if (raw == null) {
           print("Received null drawing data");
@@ -193,8 +207,19 @@ class _GameScreenState extends State<GameScreen> {
       });
     });
 
+    // Listen for game end
     socket.on('game-end', (data) {
-      showLeaderboard(data['scores'] ?? {});
+      // Navigate back to lobby
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LobbyScreen(
+            username: widget.username,
+            roomId: widget.roomId,
+            isHost: socket.id == SocketService.latestHost,
+          ),
+        ),
+      );
     });
 
     socket.on('error', (data) {
@@ -226,7 +251,7 @@ class _GameScreenState extends State<GameScreen> {
     // Update game state handler
     socket.on('game-state-update', (data) {
       if (!mounted) return;
-      
+
       print("Game state update received: $data"); // Debug log
 
       // Always clear canvas when isChoosing is true
@@ -268,25 +293,23 @@ class _GameScreenState extends State<GameScreen> {
       });
     });
 
-
-
     // Add hint update listener
-socket.on('hint-update', (data) {
-  if (!mounted || isDrawer) return;
-  setState(() {
-    if (data['indices'] != null) {
-      revealedIndices.addAll(List<int>.from(data['indices']));
-    }
-    if (data['hiddenWord'] != null) {
-      SocketService.latestHiddenWord = data['hiddenWord'] as String;
-    }
-  });
-});
+    socket.on('hint-update', (data) {
+      if (!mounted || isDrawer) return;
+      setState(() {
+        if (data['indices'] != null) {
+          revealedIndices.addAll(List<int>.from(data['indices']));
+        }
+        if (data['hiddenWord'] != null) {
+          SocketService.latestHiddenWord = data['hiddenWord'] as String;
+        }
+      });
+    });
 
     // Clear hints when word changes
     socket.on('game-state-update', (data) {
       if (!mounted) return;
-      
+
       if (data['isChoosing'] == true) {
         setState(() {
           revealedIndices.clear();
@@ -297,11 +320,11 @@ socket.on('hint-update', (data) {
 
   List<List<DrawPoint>> _parseDrawingData(dynamic data) {
     if (data == null) return [];
-    
+
     try {
       List<dynamic> decoded = data is String ? jsonDecode(data) : data;
       List<List<DrawPoint>> result = [];
-      
+
       for (var stroke in decoded) {
         if (stroke == null) {
           result.add([]);
@@ -309,11 +332,13 @@ socket.on('hint-update', (data) {
         }
         List<DrawPoint> strokePoints = [];
         for (var p in stroke) {
-          strokePoints.add(DrawPoint(
-            Offset(p[0].toDouble(), p[1].toDouble()),
-            Color(p[2]),
-            p[3].toDouble(),
-          ));
+          strokePoints.add(
+            DrawPoint(
+              Offset(p[0].toDouble(), p[1].toDouble()),
+              Color(p[2]),
+              p[3].toDouble(),
+            ),
+          );
         }
         result.add(strokePoints);
       }
@@ -323,17 +348,17 @@ socket.on('hint-update', (data) {
       return [];
     }
   }
+
   void sendDrawingData() {
     if (!mounted || !isDrawer || isChoosing) return;
 
     try {
       final data = strokes.map((stroke) {
-        return stroke.map((p) => [
-          p.offset.dx,
-          p.offset.dy,
-          p.color.value,
-          p.strokeWidth
-        ]).toList();
+        return stroke
+            .map(
+              (p) => [p.offset.dx, p.offset.dy, p.color.value, p.strokeWidth],
+            )
+            .toList();
       }).toList();
 
       final jsonData = jsonEncode(data);
@@ -342,45 +367,66 @@ socket.on('hint-update', (data) {
       print("Error sending drawing data: $e");
     }
   }
-void handleUndo() {
-  if (undoStack.isEmpty) return;
-  setState(() {
-    // Save current state to redo stack
-    redoStack.add(
-      strokes.map((stroke) => stroke.map((point) => DrawPoint.from(point)).toList()).toList()
-    );
-    // Restore previous state
-    strokes = undoStack.removeLast().map((stroke) =>
-      stroke.map((point) => DrawPoint.from(point)).toList()
-    ).toList();
-  });
-  sendDrawingData();
-}
-void handleRedo() {
-  if (redoStack.isEmpty) return;
-  setState(() {
-    // Save current state to undo stack
+
+  void handleUndo() {
+    if (undoStack.isEmpty) return;
+    setState(() {
+      // Save current state to redo stack
+      redoStack.add(
+        strokes
+            .map(
+              (stroke) => stroke.map((point) => DrawPoint.from(point)).toList(),
+            )
+            .toList(),
+      );
+      // Restore previous state
+      strokes = undoStack
+          .removeLast()
+          .map(
+            (stroke) => stroke.map((point) => DrawPoint.from(point)).toList(),
+          )
+          .toList();
+    });
+    sendDrawingData();
+  }
+
+  void handleRedo() {
+    if (redoStack.isEmpty) return;
+    setState(() {
+      // Save current state to undo stack
+      undoStack.add(
+        strokes
+            .map(
+              (stroke) => stroke.map((point) => DrawPoint.from(point)).toList(),
+            )
+            .toList(),
+      );
+      // Restore redo state
+      strokes = redoStack
+          .removeLast()
+          .map(
+            (stroke) => stroke.map((point) => DrawPoint.from(point)).toList(),
+          )
+          .toList();
+    });
+    sendDrawingData();
+  }
+
+  void handlePanStart(DragStartDetails details) {
+    if (!isDrawingAllowed()) return;
+    // Save current strokes to undoStack BEFORE starting new stroke
     undoStack.add(
-      strokes.map((stroke) => stroke.map((point) => DrawPoint.from(point)).toList()).toList()
+      strokes
+          .map(
+            (stroke) => stroke.map((point) => DrawPoint.from(point)).toList(),
+          )
+          .toList(),
     );
-    // Restore redo state
-    strokes = redoStack.removeLast().map((stroke) =>
-      stroke.map((point) => DrawPoint.from(point)).toList()
-    ).toList();
-  });
-  sendDrawingData();
-}
-void handlePanStart(DragStartDetails details) {
-  if (!isDrawingAllowed()) return;
-  // Save current strokes to undoStack BEFORE starting new stroke
-  undoStack.add(
-    strokes.map((stroke) => stroke.map((point) => DrawPoint.from(point)).toList()).toList()
-  );
-  redoStack.clear(); // Only clear redoStack on user action
-  setState(() {
-    strokes.add([]); // Start a new stroke
-  });
-}
+    redoStack.clear(); // Only clear redoStack on user action
+    setState(() {
+      strokes.add([]); // Start a new stroke
+    });
+  }
 
   void handlePanUpdate(DragUpdateDetails details) {
     final isDrawer = SocketService.latestDrawerId == socket.id;
@@ -399,34 +445,39 @@ void handlePanStart(DragStartDetails details) {
     sendDrawingData();
   }
 
-void handlePanEnd(DragEndDetails details) {
-  if (!isDrawingAllowed()) return;
-  setState(() {
-    if (strokes.isNotEmpty && strokes.last.isEmpty) {
-      strokes.removeLast();
-    }
-  });
-  sendDrawingData();
-}
-
-void handleClear() {
-  final isDrawer = SocketService.latestDrawerId == socket.id;
-  final isChoosing = SocketService.latestIsChoosing;
-  if (!isDrawer || isChoosing) return;
-
-  // Save current strokes to undoStack BEFORE clearing
-  if (strokes.isNotEmpty) {
-    undoStack.add(
-      strokes.map((stroke) => stroke.map((point) => DrawPoint.from(point)).toList()).toList()
-    );
-    redoStack.clear(); // Only clear redoStack on user action
+  void handlePanEnd(DragEndDetails details) {
+    if (!isDrawingAllowed()) return;
+    setState(() {
+      if (strokes.isNotEmpty && strokes.last.isEmpty) {
+        strokes.removeLast();
+      }
+    });
+    sendDrawingData();
   }
 
-  setState(() {
-    strokes.clear();
-  });
-  sendDrawingData();
-}
+  void handleClear() {
+    final isDrawer = SocketService.latestDrawerId == socket.id;
+    final isChoosing = SocketService.latestIsChoosing;
+    if (!isDrawer || isChoosing) return;
+
+    // Save current strokes to undoStack BEFORE clearing
+    if (strokes.isNotEmpty) {
+      undoStack.add(
+        strokes
+            .map(
+              (stroke) => stroke.map((point) => DrawPoint.from(point)).toList(),
+            )
+            .toList(),
+      );
+      redoStack.clear(); // Only clear redoStack on user action
+    }
+
+    setState(() {
+      strokes.clear();
+    });
+    sendDrawingData();
+  }
+
   void handleBucket() {
     final isDrawer = SocketService.latestDrawerId == socket.id;
     final isChoosing = SocketService.latestIsChoosing;
@@ -437,9 +488,13 @@ void handleClear() {
     ];
 
     setState(() {
-      undoStack.add(strokes.map((stroke) => 
-        stroke.map((point) => DrawPoint.from(point)).toList()
-      ).toList());
+      undoStack.add(
+        strokes
+            .map(
+              (stroke) => stroke.map((point) => DrawPoint.from(point)).toList(),
+            )
+            .toList(),
+      );
       redoStack.clear();
       strokes.insert(0, bgStroke);
     });
@@ -448,7 +503,7 @@ void handleClear() {
 
   void handleGuess(String guess) {
     if (guess.trim().isEmpty) return;
-    
+
     // Don't process as guess if:
     // 1. Player is drawer
     // 2. Game is in choosing phase
@@ -483,7 +538,7 @@ void handleClear() {
             // Handle case where score is direct integer
             return MapEntry(entry.key, {
               'score': entry.value is int ? entry.value : 0,
-              'mascot': 'default'
+              'mascot': 'default',
             });
           }
         }).toList();
@@ -515,10 +570,7 @@ void handleClear() {
                   const SizedBox(width: 12),
                   const Text(
                     'Leaderboard',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -532,9 +584,11 @@ void handleClear() {
                     final score = entry.value['score'] ?? 0;
                     final mascot = entry.value['mascot'] ?? 'default';
                     final isCurrentPlayer = entry.key == widget.username;
-                    
+
                     return Container(
-                      color: isCurrentPlayer ? Colors.blue.withOpacity(0.1) : null,
+                      color: isCurrentPlayer
+                          ? Colors.blue.withOpacity(0.1)
+                          : null,
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: _getRankColor(index + 1),
@@ -549,8 +603,9 @@ void handleClear() {
                         title: Text(
                           entry.key,
                           style: TextStyle(
-                            fontWeight: isCurrentPlayer ? 
-                              FontWeight.bold : FontWeight.normal,
+                            fontWeight: isCurrentPlayer
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                         trailing: Text(
@@ -601,35 +656,41 @@ void handleClear() {
               children: [
                 Text(
                   'The word was: $word',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 24),
-                ...roundScores.entries.map((e) => ListTile(
-                  leading: Image.asset(
-                    'assets/mascots/${e.value['mascot']}.png',
-                    width: 40,
-                    height: 40,
-                  ),
-                  title: Text(e.key),
-                  trailing: Text(
-                    '+${e.value['points']}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
+                ...roundScores.entries.map(
+                  (e) => ListTile(
+                    leading: Image.asset(
+                      'assets/mascots/${e.value['mascot']}.png',
+                      width: 40,
+                      height: 40,
+                    ),
+                    title: Text(e.key),
+                    trailing: Text(
+                      '+${e.value['points']}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
                     ),
                   ),
-                )),
-                const SizedBox(height: 16),
-                if (isDrawer) ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    if (wordChoices.isNotEmpty) {
-                      _showWordChoiceOverlay(wordChoices);
-                    }
-                  },
-                  child: const Text('Next Word'),
                 ),
+                const SizedBox(height: 16),
+                if (isDrawer)
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      if (wordChoices.isNotEmpty) {
+                        _showWordChoiceOverlay(wordChoices);
+                      }
+                    },
+                    child: const Text('Next Word'),
+                  ),
               ],
             ),
           ),
@@ -643,10 +704,10 @@ void handleClear() {
     // Clean up overlays
     _wordChoiceOverlay?.remove();
     _overlayEntry?.remove();
-    
+
     // Clean up socket listeners
     socket.off('drawing-data');
-    socket.off('timer-update'); 
+    socket.off('timer-update');
     socket.off('game-state-update');
     socket.off('canvas-clear');
     socket.off('chat-message');
@@ -655,104 +716,114 @@ void handleClear() {
     socket.off('drawer-points');
     socket.off('error');
     socket.off('hint-update');
-    
+    socket.off('game-end'); // Unsubscribe from game-end event
+
     // Clean up controllers
     messageController.dispose();
     super.dispose();
   }
 
   Widget buildWordBar() {
-  if (isChoosing && isDrawer && wordChoices.isNotEmpty) {
-    // Drawer: show word choices in horizontal wrap
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Choose a word to draw: ($timeLeft)',
-            style: const TextStyle(fontSize: 20, color: Colors.white),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8, // gap between buttons horizontally
-            runSpacing: 8, // gap between rows
-            alignment: WrapAlignment.center,
-            children: wordChoices.map((w) => SizedBox(
-              width: 120, // fixed width for each button
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+    if (isChoosing && isDrawer && wordChoices.isNotEmpty) {
+      // Drawer: show word choices in horizontal wrap
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Choose a word to draw: ($timeLeft)',
+              style: const TextStyle(fontSize: 20, color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8, // gap between buttons horizontally
+              runSpacing: 8, // gap between rows
+              alignment: WrapAlignment.center,
+              children: wordChoices
+                  .map(
+                    (w) => SizedBox(
+                      width: 120, // fixed width for each button
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.blue,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () => selectWord(w),
+                        child: Text(
+                          w,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      );
+    } else if (isChoosing) {
+      // Guessers: show "Player X is choosing a word..."
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          '$drawer is choosing a word... $timeLeft',
+          style: const TextStyle(fontSize: 20, color: Colors.white),
+        ),
+      );
+    } else {
+      // After word is chosen: show word or underlines
+      return Padding(
+        padding: const EdgeInsets.only(left: 16, right: 16, top: 0, bottom: 0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                isDrawer
+                    ? word
+                    : '$latestHiddenWord  (${latestHiddenWord.replaceAll(' ', '').length})',
+                style: const TextStyle(
+                  fontSize: 24,
+                  color: Colors.white,
+                  letterSpacing: 2.0,
                 ),
-                onPressed: () => selectWord(w),
-                child: Text(
-                  w,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Row(
+              children: [
+                buildCanvasTools(isDrawer: isDrawer, isChoosing: isChoosing),
+                const SizedBox(width: 8),
+                const Icon(Icons.timer, color: Colors.red),
+                const SizedBox(width: 4),
+                const SizedBox(height: 50),
+                Text(
+                  '$timeLeft',
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 22,
+                    color: Colors.red,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-              ),
-            )).toList(),
-          ),
-        ],
-      ),
-    );
-  } else if (isChoosing) {
-    // Guessers: show "Player X is choosing a word..."
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Text(
-        '$drawer is choosing a word... $timeLeft',
-        style: const TextStyle(fontSize: 20, color: Colors.white),
-      ),
-    );
-  } else {
-    // After word is chosen: show word or underlines
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 0, bottom: 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              isDrawer ? word : '$latestHiddenWord  (${latestHiddenWord.replaceAll(' ', '').length})',
-              style: const TextStyle(
-                fontSize: 24,
-                color: Colors.white,
-                letterSpacing: 2.0,
-              ),
-              overflow: TextOverflow.ellipsis,
+              ],
             ),
-          ),
-          Row(
-            children: [
-              buildCanvasTools(isDrawer: isDrawer, isChoosing: isChoosing),
-              const SizedBox(width: 8),
-              const Icon(Icons.timer, color: Colors.red),
-              const SizedBox(width: 4),
-              const SizedBox(height: 50),
-              Text(
-                '$timeLeft',
-                style: const TextStyle(
-                  fontSize: 22,
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    }
   }
-}
 
   Widget buildCanvasTools({required bool isDrawer, required bool isChoosing}) {
     if (!isDrawer || isChoosing) return const SizedBox();
@@ -830,14 +901,14 @@ void handleClear() {
                     _removeOverlay(); // ✅ close overlay
                   },
                 ),
-                toolButton(
-                  icon: 'assets/images/bucket.png',
-                  tooltip: 'Fill',
-                  onPressed: () {
-                    handleBucket();
-                    _removeOverlay(); // ✅ close overlay
-                  },
-                ),
+                // toolButton(
+                //   icon: 'assets/images/bucket.png',
+                //   tooltip: 'Fill',
+                //   onPressed: () {
+                //     handleBucket();
+                //     _removeOverlay(); // ✅ close overlay
+                //   },
+                // ),
                 GestureDetector(
                   onTap: () async {
                     _removeOverlay(); // ✅ close overlay before opening dialog
@@ -903,63 +974,56 @@ void handleClear() {
     return Column(
       children: [
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            child: ListView.builder(
-              reverse: true,
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: chatMessages.length,
-              itemBuilder: (context, index) {
-                final reversedIndex = chatMessages.length - 1 - index;
-                final message = chatMessages[reversedIndex];
-                
-                // Style based on message type
-                TextStyle messageStyle;
-                Color? backgroundColor;
-                
-                if (message.contains("guessed correctly")) {
-                  messageStyle = const TextStyle(
-                    color: Color.fromARGB(255, 4, 219, 11),
-                    fontWeight: FontWeight.bold,
-                  );
-                } else if (message.startsWith("$drawer:")) {
-                  messageStyle = const TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w500,
-                  );
-                  backgroundColor = const Color.fromARGB(255, 255, 196, 0);
-                } else {
-                  messageStyle = const TextStyle(
-                    color: Colors.white,
-                  );
-                }
+          child: ListView.builder(
+            reverse: true,
+            itemCount: chatMessages.length,
+            itemBuilder: (context, index) {
+              final reversedIndex = chatMessages.length - 1 - index;
+              final message = chatMessages[reversedIndex];
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: Container(
-                    padding: backgroundColor != null ? 
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4) : null,
-                    decoration: backgroundColor != null ? BoxDecoration(
-                      color: backgroundColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ) : null,
-                    child: Text(message, style: messageStyle),
-                  ),
+              TextStyle messageStyle;
+              Color? backgroundColor;
+
+              if (message.contains("guessed correctly")) {
+                messageStyle = const TextStyle(
+                  color: Color.fromARGB(255, 4, 219, 11),
+                  fontWeight: FontWeight.bold,
                 );
-              },
-            ),
+              } else if (message.startsWith("$drawer:")) {
+                messageStyle = const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w500,
+                );
+                backgroundColor = const Color.fromARGB(255, 255, 196, 0);
+              } else if (message.startsWith("System:")) {
+                messageStyle = const TextStyle(
+                  color: Colors.blue,
+                  fontStyle: FontStyle.italic,
+                );
+              } else {
+                messageStyle = const TextStyle(color: Colors.white);
+              }
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Container(
+                  padding: backgroundColor != null
+                      ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+                      : null,
+                  decoration: backgroundColor != null
+                      ? BoxDecoration(
+                          color: backgroundColor,
+                          borderRadius: BorderRadius.circular(8),
+                        )
+                      : null,
+                  child: Text(message, style: messageStyle),
+                ),
+              );
+            },
           ),
-        ),        Padding(          
-          padding: const EdgeInsets.only(
-            left: 4,
-            right: 4,
-            top: 4,
-            bottom: 0,
-          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, right: 4, top: 4, bottom: 0),
           child: Row(
             children: [
               Expanded(
@@ -974,25 +1038,32 @@ void handleClear() {
                     cursorColor: Colors.white,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: isDrawer 
-                        ? "Chat with players..." 
-                        : isChoosing
+                      hintText: isDrawer
+                          ? "Chat with players..."
+                          : isChoosing
                           ? "Waiting for word..."
                           : "Enter your guess...",
                       hintStyle: const TextStyle(color: Colors.white54),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: const BorderSide(color: Colors.white),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 0,
+                      ),
                     ),
                   ),
                 ),
@@ -1055,31 +1126,33 @@ void handleClear() {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
-                  ...choices.map((word) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.all(16),
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                  ...choices.map(
+                    (word) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.all(16),
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                        ),
-                        onPressed: () {
-                          selectWord(word);
-                          _wordChoiceOverlay?.remove();
-                          _wordChoiceOverlay = null;
-                        },
-                        child: Text(
-                          word,
-                          style: const TextStyle(fontSize: 20),
+                          onPressed: () {
+                            selectWord(word);
+                            _wordChoiceOverlay?.remove();
+                            _wordChoiceOverlay = null;
+                          },
+                          child: Text(
+                            word,
+                            style: const TextStyle(fontSize: 20),
+                          ),
                         ),
                       ),
                     ),
-                  )),
+                  ),
                 ],
               ),
             ),
@@ -1089,7 +1162,7 @@ void handleClear() {
     );
 
     _wordChoiceOverlay = overlay;
-    
+
     // Use addPostFrameCallback to ensure context is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1141,10 +1214,7 @@ void handleClear() {
                   const SizedBox(height: 16),
                   Text(
                     '$timeLeft seconds',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      color: Colors.blue,
-                    ),
+                    style: const TextStyle(fontSize: 20, color: Colors.blue),
                   ),
                 ],
               ),
@@ -1155,7 +1225,7 @@ void handleClear() {
     );
 
     _wordChoiceOverlay = overlay;
-    
+
     // Use addPostFrameCallback to ensure context is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1164,127 +1234,163 @@ void handleClear() {
     });
   }
 
+  Future<void> _showTutorialIfFirstTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seenTutorial = prefs.getBool('seenTutorial') ?? false;
+    if (!seenTutorial) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => TutorialDialog(
+            onDone: () async {
+              await prefs.setBool('seenTutorial', true);
+              Navigator.of(context).pop();
+            },
+          ),
+        );
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: SocketService(),
       builder: (context, _) {
-        return GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: Scaffold(
-            resizeToAvoidBottomInset: true, // Enable resize for keyboard
-            backgroundColor: const Color(0xFF2F31C5),
-            appBar: AppBar(
+        return WillPopScope(
+          onWillPop: () async => false, // Block physical back button
+          child: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Scaffold(
+              resizeToAvoidBottomInset: true, // Enable resize for keyboard
               backgroundColor: const Color(0xFF2F31C5),
-              systemOverlayStyle: const SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.light,
-              ),              title: const Text(
-                "Scriblet",
-                style: TextStyle(fontSize: 24, color: Colors.white),
-              ),
-              automaticallyImplyLeading: false,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.exit_to_app, color: Colors.white),
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+              appBar: AppBar(
+                backgroundColor: const Color(0xFF2F31C5),
+                systemOverlayStyle: const SystemUiOverlayStyle(
+                  statusBarColor: Colors.transparent,
+                  statusBarIconBrightness: Brightness.light,
                 ),
-                IconButton(
-                  icon: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: Image.asset(
-                        'assets/images/leaderboard.png',
-                        height: 28,
-                      ),
-                    ),
-                  ),
-                  onPressed: () => showLeaderboard(scores),
-                  tooltip: 'Leaderboard',
+                title: const Text(
+                  "Scriblet",
+                  style: TextStyle(fontSize: 24, color: Colors.white),
                 ),
-              ],
-            ),
-            body: SafeArea(
-              child: Column(
-                children: [
-                  buildWordBar(),
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
+                automaticallyImplyLeading: false,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.exit_to_app, color: Colors.white),
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LobbyScreen(
+                            username: widget.username,
+                            roomId: widget.roomId,
+                            isHost: socket.id == SocketService.latestHost,
                           ),
-                        ],
+                        ),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return GestureDetector(
-                              onPanStart: isDrawer && !isChoosing
-                                  ? handlePanStart
-                                  : null,
-                              onPanUpdate: isDrawer && !isChoosing
-                                  ? (details) {
-                                      setState(() {
-                                        strokes.last.add(DrawPoint(
-                                          details.localPosition,
-                                          selectedTool == ToolType.eraser
-                                              ? Colors.white
-                                              : selectedColor,
-                                          selectedTool == ToolType.eraser
-                                              ? strokeWidth + 8
-                                              : strokeWidth,
-                                        ));
-                                      });
-                                      sendDrawingData();
-                                    }
-                                  : null,
-                              onPanEnd: isDrawer && !isChoosing
-                                  ? (details) {
-                                      setState(() {
-                                        if (strokes.last.isEmpty) {
-                                          strokes.removeLast(); // Remove empty strokes
-                                        }
-                                      });
-                                      sendDrawingData();
-                                    }
-                                  : null,
-                              child: CustomPaint(
-                                painter: DrawingPainter(strokes: strokes),
-                                child: const SizedBox.expand(),
-                              ),
-                            );
-                          },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: Image.asset(
+                          'assets/images/leaderboard.png',
+                          height: 28,
                         ),
                       ),
                     ),
-                  ),                  Flexible(
-                    child: Container(
-                      constraints: const BoxConstraints(maxHeight: 300),
-                      margin: const EdgeInsets.only(bottom: 0),
-                      child: buildChatBox(),
-                    ),
+                    onPressed: () => showLeaderboard(scores),
+                    tooltip: 'Leaderboard',
                   ),
                 ],
+              ),
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    buildWordBar(),
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return GestureDetector(
+                                onPanStart: isDrawer && !isChoosing
+                                    ? handlePanStart
+                                    : null,
+                                onPanUpdate: isDrawer && !isChoosing
+                                    ? (details) {
+                                        setState(() {
+                                          strokes.last.add(
+                                            DrawPoint(
+                                              details.localPosition,
+                                              selectedTool == ToolType.eraser
+                                                  ? Colors.white
+                                                  : selectedColor,
+                                              selectedTool == ToolType.eraser
+                                                  ? strokeWidth + 8
+                                                  : strokeWidth,
+                                            ),
+                                          );
+                                        });
+                                        sendDrawingData();
+                                      }
+                                    : null,
+                                onPanEnd: isDrawer && !isChoosing
+                                    ? (details) {
+                                        setState(() {
+                                          if (strokes.last.isEmpty) {
+                                            strokes
+                                                .removeLast(); // Remove empty strokes
+                                          }
+                                        });
+                                        sendDrawingData();
+                                      }
+                                    : null,
+                                child: CustomPaint(
+                                  painter: DrawingPainter(strokes: strokes),
+                                  child: const SizedBox.expand(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      child: Container(
+                        constraints: const BoxConstraints(maxHeight: 300),
+                        margin: const EdgeInsets.only(bottom: 0),
+                        child: buildChatBox(),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1296,7 +1402,6 @@ void handleClear() {
   bool isDrawingAllowed() {
     return isDrawer && !isChoosing;
   }
-
 }
 
 class DrawPoint {
@@ -1308,9 +1413,9 @@ class DrawPoint {
 
   // Add copy constructor
   DrawPoint.from(DrawPoint other)
-      : offset = Offset(other.offset.dx, other.offset.dy),
-        color = Color(other.color.value),
-        strokeWidth = other.strokeWidth;
+    : offset = Offset(other.offset.dx, other.offset.dy),
+      color = Color(other.color.value),
+      strokeWidth = other.strokeWidth;
 }
 
 class DrawingPainter extends CustomPainter {

@@ -56,69 +56,77 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: SocketService(),
-      builder: (context, _) {
-        final players = SocketService.latestPlayers;
-        final host = SocketService.latestHost;
-        final roomSettings = SocketService.latestSettings;
+    return WillPopScope(
+      onWillPop: () async {
+        // Clean up room data when leaving lobby
+        SocketService().socket.disconnect();
+        SocketService().clearRoomData();
+        return true;
+      },
+      child: AnimatedBuilder(
+        animation: SocketService(),
+        builder: (context, _) {
+          final players = SocketService.latestPlayers;
+          final host = SocketService.latestHost;
+          final roomSettings = SocketService.latestSettings;
 
-        return Scaffold(
-          backgroundColor: const Color(0xFF316BFF),
-          body: Column(
-            children: [
-              const SizedBox(height: 48),
-              Text('Players in Lobby:', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 16),
-              Text('Room ID: ${widget.roomId}', style: const TextStyle(fontSize: 20)),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: players.length,
-                  itemBuilder: (_, i) => ListTile(
-                    leading: Image.asset(
-                      'assets/images/${players[i]['avatar'] ?? 'mascot1.png'}',
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.contain,
+          return Scaffold(
+            backgroundColor: const Color(0xFF316BFF),
+            body: Column(
+              children: [
+                const SizedBox(height: 48),
+                Text('Players in Lobby:', style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 16),
+                Text('Room ID: ${widget.roomId}', style: const TextStyle(fontSize: 20)),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: players.length,
+                    itemBuilder: (_, i) => ListTile(
+                      leading: Image.asset(
+                        'assets/images/${players[i]['avatar'] ?? 'mascot1.png'}',
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.contain,
+                      ),
+                      title: Text(players[i]['username'] ?? 'Player'),
+                      trailing: (host == players[i]['username'])
+                          ? const Icon(Icons.star, color: Colors.yellow)
+                          : null,
                     ),
-                    title: Text(players[i]['username'] ?? 'Player'),
-                    trailing: (host == players[i]['username'])
-                        ? const Icon(Icons.star, color: Colors.yellow)
-                        : null,
                   ),
                 ),
-              ),
-              if (widget.isHost)
+                if (widget.isHost)
+                  ElevatedButton(
+                    onPressed: startGame,
+                    child: const Text('Start Game'),
+                  ),
                 ElevatedButton(
-                  onPressed: startGame,
-                  child: const Text('Start Game'),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => RoomSettingsDialog(
+                        isHost: widget.isHost,
+                        onSave: (newSettings) {
+                          if (widget.isHost) {
+                            final socket = SocketService().socket;
+                            socket.emit('update-room-settings', {
+                              'roomId': widget.roomId,
+                              'settings': newSettings,
+                            });
+                          }
+                        },
+                      ),
+                    );
+                  },
+                  child: const Text('Room Settings'),
                 ),
-              ElevatedButton(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => RoomSettingsDialog(
-                      isHost: widget.isHost,
-                      onSave: (newSettings) {
-                        if (widget.isHost) {
-                          final socket = SocketService().socket;
-                          socket.emit('update-room-settings', {
-                            'roomId': widget.roomId,
-                            'settings': newSettings,
-                          });
-                        }
-                      },
-                    ),
-                  );
-                },
-                child: const Text('Room Settings'),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        );
-      },
+                const SizedBox(height: 24),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

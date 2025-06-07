@@ -86,16 +86,16 @@ class SocketService extends ChangeNotifier {
       // Update room-joined handler
       socket.on('room-joined', (data) {
         debugPrint('[SOCKET_SERVICE] room-joined: $data');
-        latestRoomId = data['roomId'] ?? latestRoomId;
-        latestPlayers = data['players'] ?? [];
-        latestHost = data['host'] ?? '';
-        if (data['settings'] != null) {
-          latestSettings = Map<String, dynamic>.from(data['settings']);
-        }
+        latestRoomId = data['roomId'];
+        latestPlayers = List<Map<String, dynamic>>.from(data['players']);
+        latestHost = data['host'];
+        latestSettings = Map<String, dynamic>.from(data['settings']);
+        
         if (data['gameState'] != null) {
-          _gameState = Map<String, dynamic>.from(data['gameState']);
+          _gameState = data['gameState'];
           _rejoining = true;
         }
+        
         notifyListeners();
       });
     }
@@ -197,5 +197,11 @@ class SocketService extends ChangeNotifier {
     socket.connect();
   }
 
-
+  void clearRoomData() {
+  latestRoomId = '';
+  latestPlayers = [];
+  latestHost = '';
+  latestSettings = {};
+  notifyListeners();
+}
 }
