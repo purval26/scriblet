@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 32),
                       const Center(
                         child: Text(
-                          'Welcome to    Draw It!',
+                          'Welcome to    Scriblet!',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 40,

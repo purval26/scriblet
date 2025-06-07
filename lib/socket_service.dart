@@ -21,6 +21,7 @@ class SocketService extends ChangeNotifier {
   static bool latestIsChoosing = false;
   static bool latestIsPlaying = false;
   static bool latestRoundEnd = false;
+  static bool DebugMode = false; // Set to false in production
   static Map<String, int> latestScores = {};
 
   // Add new static properties
@@ -46,8 +47,8 @@ class SocketService extends ChangeNotifier {
   }
   SocketService._internal() {    
     // Use localhost for debug, production URL for release
-    final serverUrl = kDebugMode 
-        ? 'http://localhost:3001'
+    final serverUrl = DebugMode 
+        ? 'https://scriblet-server.onrender.com'
         : 'https://scriblet-server.onrender.com';
     
     socket = IO.io(serverUrl, <String, dynamic>{
