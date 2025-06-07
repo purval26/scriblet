@@ -86,7 +86,7 @@ class _RoomSettingsDialogState extends State<RoomSettingsDialog> {
                   _dropdownRow('Draw Time', 'drawTime', [30, 45, 60, 90, 120, 140, 160]),
                   _dropdownRow('Choose Time', 'chooseTime', [30, 45, 60, 90, 120, 140, 160]),
                   _dropdownRow('Word Choices', 'wordOptions', [2, 3, 4, 5]),
-                  _dropdownRow('Difficulty', 'difficulty', ['Easy', 'Normal', 'Moderate', 'Hard']),
+                  _dropdownRow('Difficulty', 'difficulty', ['Easy', 'Normal', 'Moderate', 'Hard', 'Mix']),
                   _dropdownRow('Rounds', 'rounds', [2, 3, 4, 5, 6, 7, 8]),
                   _hintsRow(),
                   const SizedBox(height: 16),

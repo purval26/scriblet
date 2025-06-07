@@ -152,7 +152,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                 DropdownButtonFormField<String>(
                   dropdownColor: const Color.fromARGB(255, 255, 167, 251),
                   value: difficulty,
-                  items: ['Easy', 'Normal', 'Moderate', 'Hard']
+                  items: ['Mix', 'Easy', 'Normal', 'Moderate', 'Hard'] // Add "Mix" here
                       .map(
                         (e) => DropdownMenuItem(
                           value: e,

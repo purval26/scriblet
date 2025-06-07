@@ -342,55 +342,45 @@ socket.on('hint-update', (data) {
       print("Error sending drawing data: $e");
     }
   }
-  void handleUndo() {
-    if (strokes.isEmpty) return;
-    setState(() {
-      // Save current state to redo stack
-      redoStack.add(strokes.map((stroke) => 
-        stroke.map((point) => DrawPoint.from(point)).toList()
-      ).toList());
-      
-      // Pop the last action from undoStack
-      if (undoStack.isNotEmpty) {
-        strokes = undoStack.removeLast().map((stroke) =>
-          stroke.map((point) => DrawPoint.from(point)).toList()
-        ).toList();
-      } else {
-        // If no previous state in undoStack, just remove the last stroke
-        strokes.removeLast();
-      }
-    });
-    sendDrawingData();
-  }
-  void handleRedo() {
-    if (redoStack.isEmpty) return;
-    setState(() {
-      // Save current state to undo stack
-      undoStack.add(strokes.map((stroke) => 
-        stroke.map((point) => DrawPoint.from(point)).toList()
-      ).toList());
-      
-      // Apply the redo state
-      strokes = redoStack.removeLast().map((stroke) =>
-        stroke.map((point) => DrawPoint.from(point)).toList()
-      ).toList();
-    });
-    sendDrawingData();
-  }
-  void handlePanStart(DragStartDetails details) {
-    if (!isDrawingAllowed()) return;
-    
-    // Save current state before starting new stroke
-    undoStack.add(strokes.map((stroke) => 
+void handleUndo() {
+  if (undoStack.isEmpty) return;
+  setState(() {
+    // Save current state to redo stack
+    redoStack.add(
+      strokes.map((stroke) => stroke.map((point) => DrawPoint.from(point)).toList()).toList()
+    );
+    // Restore previous state
+    strokes = undoStack.removeLast().map((stroke) =>
       stroke.map((point) => DrawPoint.from(point)).toList()
-    ).toList());
-    // Clear redo stack when new action starts
-    redoStack.clear();
-    
-    setState(() {
-      strokes.add([]); // Start a new stroke
-    });
-  }
+    ).toList();
+  });
+  sendDrawingData();
+}
+void handleRedo() {
+  if (redoStack.isEmpty) return;
+  setState(() {
+    // Save current state to undo stack
+    undoStack.add(
+      strokes.map((stroke) => stroke.map((point) => DrawPoint.from(point)).toList()).toList()
+    );
+    // Restore redo state
+    strokes = redoStack.removeLast().map((stroke) =>
+      stroke.map((point) => DrawPoint.from(point)).toList()
+    ).toList();
+  });
+  sendDrawingData();
+}
+void handlePanStart(DragStartDetails details) {
+  if (!isDrawingAllowed()) return;
+  // Save current strokes to undoStack BEFORE starting new stroke
+  undoStack.add(
+    strokes.map((stroke) => stroke.map((point) => DrawPoint.from(point)).toList()).toList()
+  );
+  redoStack.clear(); // Only clear redoStack on user action
+  setState(() {
+    strokes.add([]); // Start a new stroke
+  });
+}
 
   void handlePanUpdate(DragUpdateDetails details) {
     final isDrawer = SocketService.latestDrawerId == socket.id;
@@ -409,38 +399,34 @@ socket.on('hint-update', (data) {
     sendDrawingData();
   }
 
-  void handlePanEnd(DragEndDetails details) {
-    if (!isDrawingAllowed()) return;
-    
-    setState(() {
-      if (strokes.last.isEmpty) {
-        strokes.removeLast(); // Remove empty strokes
-      } else {
-        undoStack.add(
-          strokes.map((s) => s.toList()).toList(),
-        );
-        redoStack.clear();
-      }
-    });
-    sendDrawingData();
+void handlePanEnd(DragEndDetails details) {
+  if (!isDrawingAllowed()) return;
+  setState(() {
+    if (strokes.isNotEmpty && strokes.last.isEmpty) {
+      strokes.removeLast();
+    }
+  });
+  sendDrawingData();
+}
+
+void handleClear() {
+  final isDrawer = SocketService.latestDrawerId == socket.id;
+  final isChoosing = SocketService.latestIsChoosing;
+  if (!isDrawer || isChoosing) return;
+
+  // Save current strokes to undoStack BEFORE clearing
+  if (strokes.isNotEmpty) {
+    undoStack.add(
+      strokes.map((stroke) => stroke.map((point) => DrawPoint.from(point)).toList()).toList()
+    );
+    redoStack.clear(); // Only clear redoStack on user action
   }
 
-  void handleClear() {
-    final isDrawer = SocketService.latestDrawerId == socket.id;
-    final isChoosing = SocketService.latestIsChoosing;
-    if (!isDrawer || isChoosing) return;
-
-    setState(() {
-      if (strokes.isNotEmpty) {
-        undoStack.add(
-          strokes.map((s) => s.toList()).toList(),
-        ); // Fixed conversion
-        redoStack.clear();
-      }
-      strokes.clear();
-    });
-    sendDrawingData();
-  }
+  setState(() {
+    strokes.clear();
+  });
+  sendDrawingData();
+}
   void handleBucket() {
     final isDrawer = SocketService.latestDrawerId == socket.id;
     final isChoosing = SocketService.latestIsChoosing;
@@ -1254,12 +1240,9 @@ socket.on('hint-update', (data) {
                           builder: (context, constraints) {
                             return GestureDetector(
                               onPanStart: isDrawer && !isChoosing
-                                  ? (details) {
-                                      setState(() {
-                                        strokes.add([]); // Start a new stroke
-                                      });
-                                    }
-                                  : null,                              onPanUpdate: isDrawer && !isChoosing
+                                  ? handlePanStart
+                                  : null,
+                              onPanUpdate: isDrawer && !isChoosing
                                   ? (details) {
                                       setState(() {
                                         strokes.last.add(DrawPoint(
@@ -1279,15 +1262,7 @@ socket.on('hint-update', (data) {
                                   ? (details) {
                                       setState(() {
                                         if (strokes.last.isEmpty) {
-                                          strokes
-                                              .removeLast(); // Remove empty strokes
-                                        } else {
-                                          undoStack.add(
-                                            List.from(
-                                              strokes.map((s) => List.from(s)),
-                                            ),
-                                          );
-                                          redoStack.clear();
+                                          strokes.removeLast(); // Remove empty strokes
                                         }
                                       });
                                       sendDrawingData();
