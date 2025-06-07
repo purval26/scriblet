@@ -48,7 +48,7 @@ class SocketService extends ChangeNotifier {
   SocketService._internal() {    
     // Use localhost for debug, production URL for release
     final serverUrl = DebugMode 
-        ? 'https://scriblet-server.onrender.com'
+        ? 'http://localhost:3001' // Use your local server URL
         : 'https://scriblet-server.onrender.com';
     
     socket = IO.io(serverUrl, <String, dynamic>{
