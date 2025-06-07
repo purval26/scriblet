@@ -736,7 +736,7 @@ socket.on('hint-update', (data) {
         children: [
           Expanded(
             child: Text(
-              isDrawer ? word : '${latestHiddenWord}  (${latestHiddenWord.replaceAll(' ', '').length})',
+              isDrawer ? word : '$latestHiddenWord  (${latestHiddenWord.replaceAll(' ', '').length})',
               style: const TextStyle(
                 fontSize: 24,
                 color: Colors.white,

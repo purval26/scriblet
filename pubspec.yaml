@@ -1,4 +1,4 @@
-name: draw_it
+name: scriblet
 description: "A Drawing and Guessing Game"
 publish_to: "none"
 version: 1.0.0+1

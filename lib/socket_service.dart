@@ -133,7 +133,7 @@ class SocketService extends ChangeNotifier {
       }
             if (data['hiddenWord'] != null) {
         latestHiddenWord = data['hiddenWord'];
-      };
+      }
     
 
       if (data['word'] != null) {
