@@ -16,7 +16,7 @@ class TutorialDialog extends StatelessWidget {
             Text('🎨 Draw and Guess!'),
             SizedBox(height: 12),
             Text('1. One player draws a word, others try to guess it.'),
-            Text('2. Use the chat to submit guesses.'),
+            Text('2. Use the chat to enter guesses.'),
             Text('3. Use the tools to draw, erase, undo, redo, or clear the canvas.'),
             Text('4. Points are awarded for correct guesses and good drawings!'),
             SizedBox(height: 16),

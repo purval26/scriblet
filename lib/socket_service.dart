@@ -48,9 +48,9 @@ class SocketService extends ChangeNotifier {
   SocketService._internal() {    
     // Use localhost for debug, production URL for release
     final serverUrl = 'https://scriblet-server.onrender.com';
-    final debugServerUrl = 'https://scriblet-server.onrender.com';
+    final debugServerUrl = 'http://192.168.28.153:3001';
     
-    socket = IO.io(serverUrl, <String, dynamic>{
+    socket = IO.io(debugServerUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
     });
