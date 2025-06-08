@@ -28,6 +28,7 @@ class _GameScreenState extends State<GameScreen> {
   final GlobalKey _toolsKey = GlobalKey();
   OverlayEntry? _overlayEntry;
   OverlayEntry? _wordChoiceOverlay;
+  OverlayEntry? _resultOverlay;
 
   late List<List<DrawPoint>> points = [];
   late List<List<DrawPoint>> strokes = [];
@@ -195,7 +196,13 @@ class _GameScreenState extends State<GameScreen> {
 
     socket.on('chat-message', (data) {
       setState(() {
-        chatMessages.add('${data['username']}: ${data['message']}');
+        if (data['type'] == 'correct-guess') {
+          chatMessages.add(
+            data['message'],
+          ); // Add message directly without username prefix
+        } else {
+          chatMessages.add('${data['username']}: ${data['message']}');
+        }
       });
     });
 
@@ -641,62 +648,228 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void showRoundResultsModal(Map<String, dynamic> roundScores) {
-    showModalBottomSheet(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      builder: (context) {
-        return WillPopScope(
-          onWillPop: () async => false,
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+  Widget buildResult() {
+    if (roundEnded) {
+      final scores = SocketService.awardedPoints;
+      final sortedScores = scores.entries.toList()
+        ..sort((a, b) => (b.value as int).compareTo(a.value as int));
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  'The word was: $word',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6BAFF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.emoji_events,
+                    color: Color(0xFF2F31C5),
+                    size: 32,
                   ),
                 ),
-                const SizedBox(height: 24),
-                ...roundScores.entries.map(
-                  (e) => ListTile(
-                    leading: Image.asset(
-                      'assets/mascots/${e.value['mascot']}.png',
-                      width: 40,
-                      height: 40,
-                    ),
-                    title: Text(e.key),
-                    trailing: Text(
-                      '+${e.value['points']}',
-                      style: const TextStyle(
-                        fontSize: 18,
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Word Results',
+                      style: TextStyle(
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Colors.green,
+                        color: Color(0xFF2F31C5),
                       ),
                     ),
-                  ),
+                    Container(
+                      constraints: const BoxConstraints(
+                        maxWidth: 200,
+                      ), // Limit width
+                      child: Text(
+                        'The word was:\n${word.toUpperCase()}',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                          height: 1.2,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2, // Allow two lines for longer words
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                if (isDrawer)
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      if (wordChoices.isNotEmpty) {
-                        _showWordChoiceOverlay(wordChoices);
-                      }
-                    },
-                    child: const Text('Next Word'),
-                  ),
               ],
             ),
+            const SizedBox(height: 24),
+            ...sortedScores.map((entry) {
+              final points = entry.value as int;
+              final color = points == 0 ? Colors.red : const Color(0xFF00D1A0);
+              final isCurrentPlayer = entry.key == widget.username;
+              final rank = sortedScores.indexOf(entry) + 1;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: isCurrentPlayer ? Color(0xFFE3F2FD) : Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isCurrentPlayer
+                        ? Colors.blue[200]!
+                        : Colors.grey[200]!,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _getRankColor(rank),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            '#$rank',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          entry.key,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: isCurrentPlayer
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: Color(0xFF2F31C5),
+                          ),
+                        ),
+                        if (isCurrentPlayer)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'YOU',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '+$points',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  void _showResultOverlay(BuildContext context) {
+    if (roundEnded) {
+      if (_resultOverlay != null) return; // Prevent duplicates
+
+      _resultOverlay = OverlayEntry(
+        builder: (context) => Material(
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              // Dimmed background
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _removeResultOverlay,
+                  child: Container(color: Colors.black.withOpacity(0.45)),
+                ),
+              ),
+              // Centered result card
+              Center(
+                // Changed from Positioned to Center
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: buildResult(),
+                ),
+              ),
+            ],
           ),
-        );
-      },
-    );
+        ),
+      );
+
+      Overlay.of(context, rootOverlay: true).insert(_resultOverlay!);
+    }
+  }
+
+  void _removeResultOverlay() {
+    _resultOverlay?.remove();
+    _resultOverlay = null;
   }
 
   @override
@@ -725,7 +898,6 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget buildWordBar() {
     if (isChoosing && isDrawer && wordChoices.isNotEmpty) {
-      // Drawer: show word choices in horizontal wrap
       return Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -737,38 +909,42 @@ class _GameScreenState extends State<GameScreen> {
             ),
             const SizedBox(height: 12),
             Wrap(
-              spacing: 8, // gap between buttons horizontally
-              runSpacing: 8, // gap between rows
+              spacing: 8,
+              runSpacing: 8,
               alignment: WrapAlignment.center,
-              children: wordChoices
-                  .map(
-                    (w) => SizedBox(
-                      width: 120, // fixed width for each button
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.blue,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        onPressed: () => selectWord(w),
-                        child: Text(
-                          w,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+              children: wordChoices.map((word) {
+                // Calculate dynamic width based on word length
+                final wordWidth = (word.length * 12.0).clamp(80.0, 160.0);
+
+                return Container(
+                  constraints: BoxConstraints(
+                    minWidth: 80, // Minimum width
+                    maxWidth: 160, // Maximum width
+                  ),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.blue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                  )
-                  .toList(),
+                    onPressed: () => selectWord(word),
+                    child: Text(
+                      word,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ],
         ),
@@ -986,7 +1162,7 @@ class _GameScreenState extends State<GameScreen> {
 
               if (message.contains("guessed correctly")) {
                 messageStyle = const TextStyle(
-                  color: Color.fromARGB(255, 4, 219, 11),
+                  color: Color.fromARGB(255, 0, 255, 42),
                   fontWeight: FontWeight.bold,
                 );
               } else if (message.startsWith("$drawer:")) {
@@ -995,17 +1171,15 @@ class _GameScreenState extends State<GameScreen> {
                   fontWeight: FontWeight.w500,
                 );
                 backgroundColor = const Color.fromARGB(255, 255, 196, 0);
-              } else if (message.startsWith("System:")) {
-                messageStyle = const TextStyle(
-                  color: Colors.blue,
-                  fontStyle: FontStyle.italic,
-                );
               } else {
                 messageStyle = const TextStyle(color: Colors.white);
               }
 
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 child: Container(
                   padding: backgroundColor != null
                       ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
@@ -1087,153 +1261,6 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  // Add new method for word choice overlay
-  void _showWordChoiceOverlay(List<String> choices) {
-    // Remove any existing overlay
-    _wordChoiceOverlay?.remove();
-    _wordChoiceOverlay = null;
-
-    final overlay = OverlayEntry(
-      maintainState: true, // Keep overlay alive
-      builder: (context) => Positioned.fill(
-        child: Material(
-          color: Colors.black54,
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 400),
-              margin: const EdgeInsets.all(32),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 15,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Choose a word to draw ($timeLeft)',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  ...choices.map(
-                    (word) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.all(16),
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () {
-                            selectWord(word);
-                            _wordChoiceOverlay?.remove();
-                            _wordChoiceOverlay = null;
-                          },
-                          child: Text(
-                            word,
-                            style: const TextStyle(fontSize: 20),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    _wordChoiceOverlay = overlay;
-
-    // Use addPostFrameCallback to ensure context is ready
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        Overlay.of(context).insert(overlay);
-      }
-    });
-  }
-
-  // Add new method for waiting overlay
-  void _showWaitingOverlay(String drawerName) {
-    // Remove any existing overlay
-    _wordChoiceOverlay?.remove();
-    _wordChoiceOverlay = null;
-
-    final overlay = OverlayEntry(
-      maintainState: true,
-      builder: (context) => Positioned.fill(
-        child: Material(
-          color: Colors.black54,
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 400),
-              margin: const EdgeInsets.all(32),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 15,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 24),
-                  Text(
-                    '$drawerName is choosing a word...',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '$timeLeft seconds',
-                    style: const TextStyle(fontSize: 20, color: Colors.blue),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    _wordChoiceOverlay = overlay;
-
-    // Use addPostFrameCallback to ensure context is ready
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        Overlay.of(context).insert(overlay);
-      }
-    });
-  }
-
   Future<void> _showTutorialIfFirstTime() async {
     final prefs = await SharedPreferences.getInstance();
     final seenTutorial = prefs.getBool('seenTutorial') ?? false;
@@ -1258,6 +1285,14 @@ class _GameScreenState extends State<GameScreen> {
     return AnimatedBuilder(
       animation: SocketService(),
       builder: (context, _) {
+        if (roundEnded) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showResultOverlay(context);
+            // Optionally auto-remove after 3 seconds:
+            Future.delayed(const Duration(seconds: 4), _removeResultOverlay);
+          });
+        }
+
         return WillPopScope(
           onWillPop: () async => false, // Block physical back button
           child: GestureDetector(
@@ -1304,7 +1339,12 @@ class _GameScreenState extends State<GameScreen> {
                         padding: const EdgeInsets.all(4.0),
                         child: Image.asset(
                           'assets/images/leaderboard.png',
-                          height: 28,
+                          height: 32,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.emoji_events,
+                            color: Color(0xFF2F31C5),
+                            size: 32,
+                          ),
                         ),
                       ),
                     ),
@@ -1316,6 +1356,7 @@ class _GameScreenState extends State<GameScreen> {
               body: SafeArea(
                 child: Column(
                   children: [
+                    // buildResult(),r
                     buildWordBar(),
                     Expanded(
                       flex: 2,

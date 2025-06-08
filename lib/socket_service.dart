@@ -16,6 +16,7 @@ class SocketService extends ChangeNotifier {
   static String latestDrawer = '';
   static String latestDrawerId = '';
   static String latestHiddenWord = '';
+  static Map<String, dynamic>? wordEndScores;
   static List<String> latestWordChoices = [];
   static String latestWord = '';
   static bool latestIsChoosing = false;
@@ -23,6 +24,7 @@ class SocketService extends ChangeNotifier {
   static bool latestRoundEnd = false;
   static bool debugMode = false; // Set to false in production
   static Map<String, int> latestScores = {};
+  static Map<String, int> awardedPoints= {};
 
   // Add new static properties
   static bool _rejoining = false;
@@ -114,6 +116,10 @@ class SocketService extends ChangeNotifier {
 
 
       // Log each property individually
+      if(data['awardedPoints'] != null) {
+        debugPrint('[SOCKET_SERVICE] Setting Points: ${data['awardedPoints']}');
+        awardedPoints = Map<String, int>.from(data['awardedPoints']);
+      }
 
       if (data['drawer'] != null) {
         debugPrint('[SOCKET_SERVICE] Setting drawer: ${data['drawer']}');
@@ -170,13 +176,13 @@ class SocketService extends ChangeNotifier {
         latestRoundEnd = data['roundEnd'];
       }
 
-      debugPrint('[SOCKET_SERVICE] Current state after update:');
-      debugPrint('  - drawer: $latestDrawer');
-      debugPrint('  - drawerId: $latestDrawerId');
-      debugPrint('  - wordChoices: $latestWordChoices');
-      debugPrint('  - word: $latestWord');
-      debugPrint('  - isChoosing: $latestIsChoosing');
-      debugPrint('  - isPlaying: $latestIsPlaying');
+      // debugPrint('[SOCKET_SERVICE] Current state after update:');
+      // debugPrint('  - drawer: $latestDrawer');
+      // debugPrint('  - drawerId: $latestDrawerId');
+      // debugPrint('  - wordChoices: $latestWordChoices');
+      // debugPrint('  - word: $latestWord');
+      // debugPrint('  - isChoosing: $latestIsChoosing');
+      // debugPrint('  - isPlaying: $latestIsPlaying');
 
       notifyListeners();
       }
