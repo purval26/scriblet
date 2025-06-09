@@ -652,7 +652,7 @@ class _GameScreenState extends State<GameScreen> {
     if (roundEnded) {
       final scores = SocketService.awardedPoints;
       final sortedScores = scores.entries.toList()
-        ..sort((a, b) => (b.value as int).compareTo(a.value as int));
+        ..sort((a, b) => (b.value).compareTo(a.value));
 
       return Container(
         width: double.infinity,
@@ -720,7 +720,7 @@ class _GameScreenState extends State<GameScreen> {
             ),
             const SizedBox(height: 24),
             ...sortedScores.map((entry) {
-              final points = entry.value as int;
+              final points = entry.value;
               final color = points == 0 ? Colors.red : const Color(0xFF00D1A0);
               final isCurrentPlayer = entry.key == widget.username;
               final rank = sortedScores.indexOf(entry) + 1;
@@ -826,7 +826,7 @@ class _GameScreenState extends State<GameScreen> {
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       );
