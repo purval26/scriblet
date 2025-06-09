@@ -6,6 +6,9 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A multiplayer drawing and guessing game">
 
+  <!-- Add this meta tag -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
   <!-- PWA meta tags -->
   <meta name="theme-color" content="#2F31C5">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,19 +16,30 @@
   <meta name="apple-mobile-web-app-title" content="Scriblet">
   
   <!-- Icons -->
-  <link rel="apple-touch-icon" href="assets/images/pencil.png">
-  <link rel="icon" type="image/png" href="assets/images/pencil.png"/>
+  <link rel="apple-touch-icon" href="./favicon.png">
+  <link rel="icon" type="image/png" href="./favicon.png"/>
 
   <title>Scriblet</title>
   <link rel="manifest" href="manifest.json">
 
+  <!-- Add CanvasKit initialization -->
   <script>
-    // Service worker registration
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('flutter_service_worker.js?v=1408341453');
-      });
-    }
+    // CanvasKit configuration
+    window.flutterWebRenderer = "canvaskit";
+    window.addEventListener('load', function () {
+      // Initialize CanvasKit
+      if (window.CanvasKitInit) {
+        window.CanvasKitInit({
+          locateFile: (file) => `/canvaskit/${file}`,
+        });
+      }
+      
+      // Service worker registration
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('flutter_service_worker.js?v=2708059823');
+      }
+    });
+
     // Disable back button
     window.addEventListener('load', function() {
       history.pushState(null, null, location.href);
@@ -34,6 +48,8 @@
       };
     });
   </script>
+  <!-- Add CanvasKit script before flutter_bootstrap.js -->
+  <script src="canvaskit/canvaskit.js"></script>
   <script src="flutter_bootstrap.js" defer></script>
 </head>
 <body>

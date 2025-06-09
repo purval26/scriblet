@@ -537,23 +537,18 @@ class _GameScreenState extends State<GameScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        // Convert scores to proper format and handle type safety
+        // Convert scores to proper format
         final processedScores = scores.entries.map((entry) {
-          if (entry.value is Map) {
-            return MapEntry(entry.key, entry.value as Map<String, dynamic>);
-          } else {
-            // Handle case where score is direct integer
-            return MapEntry(entry.key, {
-              'score': entry.value is int ? entry.value : 0,
-              'mascot': 'default',
-            });
-          }
+          return MapEntry(entry.key, {
+            'score': entry.value, // Direct score value
+            'mascot': 'mascot${(scores.keys.toList().indexOf(entry.key) % 6) + 1}.png',
+          });
         }).toList();
 
         // Sort by score
         processedScores.sort((a, b) {
-          final scoreA = a.value['score'] is int ? a.value['score'] as int : 0;
-          final scoreB = b.value['score'] is int ? b.value['score'] as int : 0;
+          final scoreA = a.value['score'] as int;
+          final scoreB = b.value['score'] as int;
           return scoreB.compareTo(scoreA);
         });
 
@@ -588,8 +583,8 @@ class _GameScreenState extends State<GameScreen> {
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final entry = processedScores[index];
-                    final score = entry.value['score'] ?? 0;
-                    final mascot = entry.value['mascot'] ?? 'default';
+                    final score = entry.value['score'] as int;
+                    final mascot = entry.value['mascot'] as String;
                     final isCurrentPlayer = entry.key == widget.username;
 
                     return Container(
