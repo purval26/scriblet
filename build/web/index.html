@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="/">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A multiplayer drawing and guessing game">
+
+  <!-- PWA meta tags -->
+  <meta name="theme-color" content="#2F31C5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Scriblet">
+  
+  <!-- Icons -->
+  <link rel="apple-touch-icon" href="assets/images/pencil.png">
+  <link rel="icon" type="image/png" href="assets/images/pencil.png"/>
+
+  <title>Scriblet</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Service worker registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('flutter_service_worker.js?v=1408341453');
+      });
+    }
+    // Disable back button
+    window.addEventListener('load', function() {
+      history.pushState(null, null, location.href);
+      window.onpopstate = function(event) {
+        history.pushState(null, null, location.href);
+      };
+    });
+  </script>
+  <script src="flutter_bootstrap.js" defer></script>
+</head>
+<body>
+  <script src="main.dart.js" type="application/javascript"></script>
+</body>
+</html>
