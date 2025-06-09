@@ -6,14 +6,15 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A multiplayer drawing and guessing game">
 
-  <!-- iOS meta tags & icons -->
+  <!-- PWA meta tags -->
+  <meta name="theme-color" content="#2F31C5">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Scriblet">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  
+  <!-- Icons -->
+  <link rel="apple-touch-icon" href="assets/images/pencil.png">
+  <link rel="icon" type="image/png" href="assets/images/pencil.png"/>
 
   <title>Scriblet</title>
   <link rel="manifest" href="manifest.json">
@@ -25,7 +26,6 @@
         navigator.serviceWorker.register('flutter_service_worker.js');
       });
     }
-
     // Disable back button
     window.addEventListener('load', function() {
       history.pushState(null, null, location.href);
@@ -34,8 +34,9 @@
       };
     });
   </script>
+  <script src="flutter_bootstrap.js" defer></script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="main.dart.js" type="application/javascript"></script>
 </body>
 </html>
