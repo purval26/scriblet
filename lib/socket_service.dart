@@ -19,6 +19,7 @@ class SocketService extends ChangeNotifier {
   static Map<String, dynamic>? wordEndScores;
   static List<String> latestWordChoices = [];
   static String latestWord = '';
+  static String serverUrl = '';
   static bool latestIsChoosing = false;
   static bool latestIsPlaying = false;
   static bool latestRoundEnd = false;
@@ -49,8 +50,14 @@ class SocketService extends ChangeNotifier {
   }
   SocketService._internal() {    
     // Use localhost for debug, production URL for release
-    final serverUrl = 'https://scriblet-server.onrender.com';
-    final debugServerUrl = 'http://192.168.28.153:3001';
+
+    if (debugMode) {
+      debugPrint('[SOCKET_SERVICE] Running in debug mode');
+     serverUrl = 'http://192.168.28.153:3001';
+    } else {
+      debugPrint('[SOCKET_SERVICE] Running in production mode');
+     serverUrl = 'https://scriblet-server.onrender.com';
+    }
     
     socket = IO.io(serverUrl, <String, dynamic>{
       'transports': ['websocket'],
