@@ -77,6 +77,9 @@ class _GameScreenState extends State<GameScreen> {
   // Add new state variables
   Set<int> revealedIndices = {};
 
+  // Add flag to track navigation
+  bool isNavigatingToLobby = false;
+
   void toggleToolPanel() {
     if (isToolPanelExpanded) {
       _removeOverlay();
@@ -194,17 +197,22 @@ class _GameScreenState extends State<GameScreen> {
       });
     });
 
-    socket.on('chat-message', (data) {
-      setState(() {
-        if (data['type'] == 'correct-guess') {
-          chatMessages.add(
-            data['message'],
-          ); // Add message directly without username prefix
-        } else {
-          chatMessages.add('${data['username']}: ${data['message']}');
-        }
-      });
-    });
+socket.on('chat-message', (data) {
+  setState(() {
+    // Just add the message without any prefixes if it's a system message
+    if (data['isSystem'] == true) {
+      chatMessages.add(data['message']);
+    } 
+    // Handle correct guess messages
+    else if (data['type'] == 'correct-guess') {
+      chatMessages.add(data['message']);
+    }
+    // Regular chat messages with username prefix
+    else {
+      chatMessages.add('${data['username']}: ${data['message']}');
+    }
+  });
+});
 
     socket.on('correct-guess', (data) {
       setState(() {
@@ -216,14 +224,145 @@ class _GameScreenState extends State<GameScreen> {
 
     // Listen for game end
     socket.on('game-end', (data) {
-      // Navigate back to lobby
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LobbyScreen(
-            username: widget.username,
-            roomId: widget.roomId,
-            isHost: socket.id == SocketService.latestHost,
+      if (!mounted || isNavigatingToLobby) return;
+      
+      // Update scores first
+      if (data['scores'] != null) {
+        SocketService.latestScores = Map<String, int>.from(
+          data['scores'].map((key, value) => MapEntry(key as String, value as int))
+        );
+      }
+
+      // Show game end leaderboard
+      showModalBottomSheet(
+        context: context,
+        isDismissible: false,
+        enableDrag: false,
+        backgroundColor: Colors.transparent,
+        builder: (context) => WillPopScope(
+          onWillPop: () async => false,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/images/leaderboard.png',
+                      height: 32,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.emoji_events,
+                        color: Color(0xFF2F31C5),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Game Over!',
+                      style: TextStyle(
+                        fontSize: 24, 
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2F31C5),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: SocketService.latestScores.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final entries = SocketService.latestScores.entries.toList()
+                        ..sort((a, b) => (b.value).compareTo(a.value));
+                      final entry = entries[index];
+                      final isCurrentPlayer = entry.key == widget.username;
+
+                      return Container(
+                        color: isCurrentPlayer
+                            ? Colors.blue.withOpacity(0.1)
+                            : null,
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: _getRankColor(index + 1),
+                            child: Text(
+                              '#${index + 1}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            entry.key,
+                            style: TextStyle(
+                              fontWeight: isCurrentPlayer
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          trailing: Text(
+                            '${entry.value}',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: _getRankColor(index + 1),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2F31C5),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      // Set navigation flag before navigating
+                      isNavigatingToLobby = true;
+                      
+                      // Clear game state
+                      _removeResultOverlay();
+                      SocketService.latestRoundEnd = false;
+                      
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LobbyScreen(
+                            username: widget.username,
+                            roomId: widget.roomId,
+                            isHost: socket.id == SocketService.latestHost,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'Continue to Lobby',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -830,7 +969,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _showResultOverlay(BuildContext context) {
-    if (roundEnded) {
+    if (roundEnded && !isNavigatingToLobby) {
       if (_resultOverlay != null) return; // Prevent duplicates
 
       _resultOverlay = OverlayEntry(
@@ -869,6 +1008,10 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
+    // Clear game end state when disposing
+    _removeResultOverlay();
+    SocketService.latestRoundEnd = false;
+
     // Clean up overlays
     _wordChoiceOverlay?.remove();
     _overlayEntry?.remove();
@@ -1157,9 +1300,16 @@ class _GameScreenState extends State<GameScreen> {
 
               if (message.contains("guessed correctly")) {
                 messageStyle = const TextStyle(
-                  color: Color.fromARGB(255, 0, 255, 42),
+                  color: Color(0xFF00FF2A),
                   fontWeight: FontWeight.bold,
                 );
+              } else if (message.contains("joined the game") || 
+                        message.contains("left the game")) {
+                messageStyle = const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w500,
+                );
+                backgroundColor = Colors.amber[200]; // System messages in yellow
               } else if (message.startsWith("$drawer:")) {
                 messageStyle = const TextStyle(
                   color: Colors.black,
@@ -1169,6 +1319,11 @@ class _GameScreenState extends State<GameScreen> {
               } else {
                 messageStyle = const TextStyle(color: Colors.white);
               }
+
+              // Remove "System:" prefix if present
+              final displayMessage = message.startsWith("System: ") 
+                  ? message.substring(7) 
+                  : message;
 
               return Padding(
                 padding: const EdgeInsets.symmetric(
@@ -1185,7 +1340,7 @@ class _GameScreenState extends State<GameScreen> {
                           borderRadius: BorderRadius.circular(8),
                         )
                       : null,
-                  child: Text(message, style: messageStyle),
+                  child: Text(displayMessage, style: messageStyle),
                 ),
               );
             },
@@ -1310,14 +1465,57 @@ class _GameScreenState extends State<GameScreen> {
                   IconButton(
                     icon: const Icon(Icons.exit_to_app, color: Colors.white),
                     onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LobbyScreen(
-                            username: widget.username,
-                            roomId: widget.roomId,
-                            isHost: socket.id == SocketService.latestHost,
+                      // Show confirmation dialog
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
+                          title: const Text(
+                            'Leave Game?',
+                            style: TextStyle(color: Color(0xFF2F31C5)),
+                          ),
+                          content: const Text(
+                            'Are you sure you want to leave the game? You will lose your progress.',
+                            style: TextStyle(color: Colors.black87),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                // Clean up game state
+                                socket.emit('leave-game', {
+                                  'roomId': widget.roomId,
+                                  'username': widget.username
+                                });
+                                
+                                // Clear local state
+                                _removeResultOverlay();
+                                _removeOverlay();
+                                SocketService.latestRoundEnd = false;
+                                SocketService.setGameState(null);
+                                
+                                // Pop back to previous screen
+                                Navigator.pop(context); // Close dialog
+                                Navigator.pop(context); // Go back to previous screen
+                              },
+                              child: const Text(
+                                'Leave',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       );
                     },

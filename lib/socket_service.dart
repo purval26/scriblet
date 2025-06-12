@@ -53,7 +53,7 @@ class SocketService extends ChangeNotifier {
 
     if (debugMode) {
       debugPrint('[SOCKET_SERVICE] Running in debug mode');
-     serverUrl = 'http://192.168.28.153:3001';
+     serverUrl = 'http://192.168.200.153:3001';
     } else {
       debugPrint('[SOCKET_SERVICE] Running in production mode');
      serverUrl = 'https://scriblet-server.onrender.com';
